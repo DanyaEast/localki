@@ -1,0 +1,35 @@
+#!/bin/zsh
+# localki — подпись локальных серверов для приложения «Локалки».
+#   localki name <порт> "<Имя>" ["<зачем>"]   подписать сервер на порту
+#   localki unname <порт>                       снять подпись
+#   localki list                                показать подписи
+# Подписи лежат в ~/.localki/names/<порт>.json; приложение берёт их по порту,
+# а подпись, сделанную раньше запуска текущего сервера на этом порту, игнорирует.
+set -e
+DIR="$HOME/.localki/names"
+mkdir -p "$DIR"
+
+case "$1" in
+  name)
+    port="$2"; name="$3"; purpose="${4:-}"
+    if [[ ! "$port" =~ '^[0-9]+$' || -z "$name" ]]; then
+      echo 'Использование: localki name <порт> "<Имя>" ["<зачем>"]' >&2; exit 1
+    fi
+    LK_NAME="$name" LK_PURPOSE="$purpose" LK_CWD="$PWD" /usr/bin/osascript -l JavaScript -e '
+      const env = $.NSProcessInfo.processInfo.environment;
+      const get = k => ObjC.unwrap(env.objectForKey(k)) || "";
+      JSON.stringify({ name: get("LK_NAME"), purpose: get("LK_PURPOSE"), cwd: get("LK_CWD"),
+                       created: Math.floor(Date.now() / 1000) });' > "$DIR/$port.json.tmp"
+    mv "$DIR/$port.json.tmp" "$DIR/$port.json"
+    echo "Подписал :$port — $name"
+    ;;
+  unname)
+    rm -f "$DIR/$2.json"
+    ;;
+  list)
+    for f in "$DIR"/*.json(N); do echo ":${f:t:r}  $(cat "$f")"; done
+    ;;
+  *)
+    sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'
+    ;;
+esac
